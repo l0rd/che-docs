@@ -10,7 +10,7 @@
 FROM ruby:2.6-alpine
 COPY src/main/Gemfile* /tmp/
 
-RUN apk add --no-cache --update libstdc++ bash ca-certificates curl python3 grep perl libxml2-dev xmlstarlet \
+RUN apk add --no-cache --update libstdc++ bash ca-certificates curl python3 git grep perl libxml2-dev xmlstarlet \
     && apk add --no-cache --virtual build-dependencies build-base \
     && cd /tmp \
     && time bundle install --no-cache --frozen \

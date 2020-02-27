@@ -22,42 +22,7 @@ usage() {
     -newreference <guide> <title>   Create a new reference in guide <guide>, with title <title>
     -test-adoc [<fileslist>]        Run test-adoc.sh on files (default: on all files)
     -vale [<fileslist>]             Run vale linter on files (default: on all files)
-  VARIABLES:
-     CHEDOCSIMAGE             Override the default container image.
   "
-}
-
-# Detect presence of podman. Fallback to docker
-RUNNER="$(command -v podman 2>/dev/null || command -v docker || true)"
-
-case "${RUNNER}" in
-  *podman)
-    echo "Using $RUNNER."
-    [ "$(find src/main/_site -user root -print -prune -o -prune 2>/dev/null)" ] && \
-      echo "Previous build was probably created with docker. We need root privileges to delete it." && \
-      sudo rm -rf src/main/_site/ 
-    ;;
-  *docker)
-    echo "The preferred runner podman is not installed. Using fallback runner $RUNNER."
-    ;;
-  *)
-    echo "No runner detected. Please install podman."
-    exit 1
-    ;;
-esac
-
-# Use the user defined container, else the default container.
-IMAGE=${CHEDOCSIMAGE:-quay.io/eclipse/che-docs}
-
-# Default mountmoint for the container
-SRC_PATH="$(pwd)/src/main"
-
-# Define the run command as a function (shellcheck recommendation)
-runner() {
-  # Pull the default container image, else assume the image is present.
-  [ "${IMAGE}" = "quay.io/eclipse/che-docs" ] && "${RUNNER}" pull "${IMAGE}"
-
-  "${RUNNER}" run --rm -v "${SRC_PATH}":/che-docs:Z "$@"
 }
 
 run_newdoc() {
@@ -65,9 +30,9 @@ run_newdoc() {
     SRC_PATH="$(pwd)/src/main/pages/che-7/${1}"
     shift
     TITLE="${*}"
-    echo "Running newdoc in ${SRC_PATH} with option ${NATURE} ${TITLE}"
-    runner "${IMAGE}" -w "${SRC_PATH}" \
-      bash -c "newdoc -C ${NATURE} \"${TITLE}\""
+    echo "Running newdoc in ${SRC_PATH} with option \"${NATURE}\" \"${TITLE}\""
+    cd "${SRC_PATH}"
+    newdoc -C "${NATURE}" "${TITLE}"
 }
 
 case "$1" in
@@ -76,13 +41,11 @@ case "$1" in
     ;;
   -prod)
     echo "Building for production (publishing on eclipse.org/che/docs/)."
-    runner "${IMAGE}" \
-      sh -c "cd /che-docs && jekyll clean && jekyll build --config _config.yml,_config-web.yml"
+    cd /che-docs && jekyll clean && jekyll build --config _config.yml,_config-web.yml
     ;;
   -war)
     echo "Building for embedding in Che (linking from the app)."
-    runner "${IMAGE}" \
-      sh -c "cd /che-docs && jekyll clean && jekyll build --config _config.yml,_config-war.yml"
+    cd /che-docs && jekyll clean && jekyll build --config _config.yml,_config-war.yml
     ;;
   -newassembly)
     NATURE="-a"
@@ -105,20 +68,17 @@ case "$1" in
     SRC_PATH="$(pwd)"
     FILES="${*:-src/main/pages/*/*/*.adoc}"
     echo "Running test-adoc.sh on ${FILES}"
-    runner "${IMAGE}" \
-      bash -c "test-adoc.sh ${FILES}"
+    test-adoc.sh ${FILES}
     ;;
   -vale)
     shift
     SRC_PATH="$(pwd)"
     FILES="${*:-.}"
     echo "Running vale on ${FILES}"
-    runner "${IMAGE}" \
-      bash -c "vale ${FILES}"
+    vale ${FILES}
     ;;
   *)
     echo "Building and serving the docs for local preview."
-    runner -p 35729:35729 -p 4000:4000 "${IMAGE}" \
-      sh -c "cd /che-docs && jekyll clean && jekyll serve --livereload -H 0.0.0.0 --trace"
+    cd /che-docs && jekyll clean && jekyll serve --livereload -H 0.0.0.0 --trace
   ;;
 esac
